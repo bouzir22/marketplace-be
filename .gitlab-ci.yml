@@ -28,13 +28,9 @@ build:
 
 dockerize:
   stage: dockerize
-  image: docker:26.0.0
-  services:
-    - docker:dind
+  image: maven:3.9.6-eclipse-temurin-17
   script:
-    - docker info
-    - docker build -t $DOCKER_IMAGE .
-    - docker images $DOCKER_IMAGE
+    - mvn compile jib:build -Dimage=$DOCKER_IMAGE
   only:
     - merge_requests
     - main
