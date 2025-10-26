@@ -13,11 +13,8 @@ variables:
 cache:
   paths:
     - .m2/repository
-
-before_script:
-  - echo "Using JDK 17"
-  - export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 || true
-  - export PATH=$JAVA_HOME/bin:$PATH
+ 
+ 
 
 build:
   stage: build
