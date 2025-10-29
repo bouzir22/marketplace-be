@@ -34,7 +34,7 @@ dockerize:
     REGISTRY_USERNAME: "$CI_REGISTRY_USER"
     REGISTRY_PASSWORD: "$CI_REGISTRY_PASSWORD"
   script:
-    - mvn  com.google.cloud.tools:jib-maven-plugin:3.4.4:build -Djib.from.auth.username=${CI_REGISTRY_USER} -Djib.from.auth.password=${CI_REGISTRY_PASSWORD} -Djib.to.auth.username=${CI_REGISTRY_USER} -Djib.to.auth.password=${CI_REGISTRY_PASSWORD} -Djib.to.image=${CI_REGISTRY_IMAGE}/backend:$DOCKER_TAG
+    - mvn  com.google.cloud.tools:jib-maven-plugin:3.4.4:build -Djib.from.auth.username=${CI_REGISTRY_USER} -Djib.from.auth.password=${CI_REGISTRY_PASSWORD} -Djib.to.auth.username=${CI_REGISTRY_USER} -Djib.to.auth.password=${CI_REGISTRY_PASSWORD} -Djib.to.image=${CI_REGISTRY_IMAGE}/backend:latest
   only:
     - merge_requests
     - main
