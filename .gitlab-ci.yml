@@ -29,9 +29,14 @@ build:
 dockerize:
   stage: dockerize
   image: maven:3.9.6-eclipse-temurin-17
+  variables:
+    REGISTRY_USERNAME: "$CI_REGISTRY_USER"
+    REGISTRY_PASSWORD: "$CI_REGISTRY_PASSWORD"
   script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" "$CI_REGISTRY" --password-stdin
-    - mvn compile jib:build -Dimage=$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+    - mvn -B compile jib:build \
+        -Dimage=$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA \
+        -Djib.to.auth.username=$REGISTRY_USERNAME \
+        -Djib.to.auth.password=$REGISTRY_PASSWORD
   only:
     - merge_requests
     - main
