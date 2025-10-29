@@ -37,7 +37,6 @@ dockerize:
   - mvn compile jib:build \
     -Djib.to.auth.username=${CI_REGISTRY_USER} \
     -Djib.to.auth.password=${CI_REGISTRY_PASSWORD} \
-    -Djib.to.image=backend:latest
   only:
     - merge_requests
     - main
