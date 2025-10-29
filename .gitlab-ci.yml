@@ -33,10 +33,11 @@ dockerize:
     REGISTRY_USERNAME: "$CI_REGISTRY_USER"
     REGISTRY_PASSWORD: "$CI_REGISTRY_PASSWORD"
   script:
-    - mvn -B -Dimage=$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA \
-        -Djib.to.auth.username=$REGISTRY_USERNAME \
-        -Djib.to.auth.password=$REGISTRY_PASSWORD \
-        compile jib:build
+  - mvn -B \
+      -Dimage=$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA \
+      -Djib.to.auth.username=$REGISTRY_USERNAME \
+      -Djib.to.auth.password=$REGISTRY_PASSWORD \
+      jib:build
   only:
     - merge_requests
     - main
