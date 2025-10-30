@@ -52,16 +52,17 @@ deploy:
   script:
   - mkdir -p ~/.ssh
   
-  # Write key with proper formatting
-  - echo -e "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+  # Decode base64 key
+  - echo "$SSH_PRIVATE_KEY" | base64 -d > ~/.ssh/id_rsa
   - chmod 600 ~/.ssh/id_rsa
   
-  # Debug: Check key format (first and last lines)
+  # Debug: Check key format
   - echo "Key header:"; head -n 1 ~/.ssh/id_rsa
   - echo "Key footer:"; tail -n 1 ~/.ssh/id_rsa
+  - echo "Key line count:"; wc -l ~/.ssh/id_rsa
   
   # Validate SSH key
-  - ssh-keygen -y -f ~/.ssh/id_rsa > /dev/null
+  - ssh-keygen -y -f ~/.ssh/id_rsa > /dev/null || { echo "Invalid SSH key format"; exit 1; }
   
   # Add host key
   - ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
@@ -69,7 +70,7 @@ deploy:
   # Debug info
   - echo "Attempting to connect to $VM_USER@$VM_HOST"
   
-  # Test connection with log
+  # Test connection
   - ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=accept-new "$VM_USER@$VM_HOST" "echo 'Successfully connected to VM'"
   
   # Deploy
@@ -106,7 +107,3 @@ deploy:
     
     echo "=== Deployment completed successfully ==="
     EOF
-
-  only:
-
-    - main
