@@ -85,19 +85,16 @@ deploy:
     echo "Logging into Docker registry..."
     echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" "$CI_REGISTRY" --password-stdin
     
-    echo "Pulling image: $CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}"
-    docker pull $CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}
-    
-    echo "Stopping old container: $SERVICE_NAME"
-    docker stop $SERVICE_NAME || true
-    docker rm $SERVICE_NAME || true
+    echo "Pulling image: $CI_REGISTRY_IMAGE:latest"
+    docker pull $CI_REGISTRY_IMAGE:latest
+ 
     
     echo "Starting new container: $SERVICE_NAME"
     docker run -d \
-      --name $SERVICE_NAME \
+      --name be \
       --restart unless-stopped \
-      -p ${HOST_PORT}:${CONTAINER_PORT} \
-      $CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}
+      -p 8080:8080 \
+      $CI_REGISTRY_IMAGE:latest
     
     echo "Container started successfully"
     docker ps | grep $SERVICE_NAME
