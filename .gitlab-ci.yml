@@ -44,33 +44,43 @@ deploy:
   image: alpine:latest
   before_script:
     - apk add --no-cache openssh-client bash
-  script:
-    - mkdir -p ~/.ssh
-    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
-    - chmod 600 ~/.ssh/id_rsa
-    - ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+script:
+    # Use a simpler single-line command for better YAML handling of the Here Document.
+    # The 'set -e' is moved inside the remote script to ensure the whole block fails on the first error.
     - |
-      ssh -i ~/.ssh/id_rsa $VM_USER@$VM_HOST /bin/bash -s <<'EOF'
-      set -e
-      # login to registry
-      echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" "$CI_REGISTRY" --password-stdin
-
-      # pull latest image
-      docker pull $CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}
-
-      # stop previous container (ignore failure)
-      docker stop $SERVICE_NAME || true
-      docker rm $SERVICE_NAME || true
-
-      # run new container (customize env, volumes, options)
+      ssh -i ~/.ssh/id_rsa "${VM_USER}@${VM_HOST}" /bin/bash -s <<'EOF'
+      
+      set -e # Exit immediately if any command fails
+      
+      echo "--- 🔑 Logging into Container Registry ---"
+      # Log in to registry using stdin for password to keep it out of shell history
+      echo "${CI_REGISTRY_PASSWORD}" | docker login -u "${CI_REGISTRY_USER}" "${CI_REGISTRY}" --password-stdin
+      
+      echo "--- ⬇️ Pulling Latest Image ---"
+      # Pull latest image using the short SHA for specificity
+      DEPLOY_IMAGE="${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}"
+      docker pull "${DEPLOY_IMAGE}"
+      
+      echo "--- 🔄 Stopping and Removing Old Container ---"
+      # Stop and remove previous container (ignore failure if it doesn't exist)
+      docker stop "${SERVICE_NAME}" 2>/dev/null || true
+      docker rm "${SERVICE_NAME}" 2>/dev/null || true
+      
+      echo "--- ⬆️ Running New Container ---"
+      # Run new container (customize env, volumes, options)
       docker run -d \
-        --name $SERVICE_NAME \
+        --name "${SERVICE_NAME}" \
         --restart unless-stopped \
-        -p ${HOST_PORT}:${CONTAINER_PORT} \
-        $CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}
+        -p "${HOST_PORT}:${CONTAINER_PORT}" \
+        "${DEPLOY_IMAGE}"
+        
+      echo "Container ${SERVICE_NAME} deployed successfully."
 
-      # optional: cleanup older images (simple)
-      docker image prune -af || true
+      echo "--- 🧹 Cleaning Up Docker Images ---"
+      # Cleanup older images (only remove dangling images)
+      docker image prune -f || true 
+      # OPTIONAL: Use 'docker image prune -a' only if disk space is critical and you understand the risks.
+      
       EOF
   only:
     - main
