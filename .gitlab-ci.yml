@@ -94,7 +94,7 @@ deploy:
       --name be \
       --restart unless-stopped \
       -p 8080:8080 \
-      $CI_REGISTRY_IMAGE:latest
+      $CI_REGISTRY_IMAGE/backend:latest
     
     echo "Container started successfully"
     docker ps | grep $SERVICE_NAME
