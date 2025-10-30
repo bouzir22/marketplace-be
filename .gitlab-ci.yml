@@ -5,16 +5,14 @@ stages:
 
 variables:
   MAVEN_CLI_OPTS: "-s .m2/settings.xml --batch-mode"
-  DOCKER_IMAGE: "$CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}"
-  SERVICE_NAME: springboot-app
+  DOCKER_IMAGE: "$CI_REGISTRY_IMAGE/backend:${CI_COMMIT_SHORT_SHA}"
+  SERVICE_NAME: be
   CONTAINER_PORT: 8080
   HOST_PORT: 8080
 
 cache:
   paths:
     - .m2/repository
- 
- 
 
 build:
   stage: build
@@ -33,70 +31,71 @@ dockerize:
     REGISTRY_USERNAME: "$CI_REGISTRY_USER"
     REGISTRY_PASSWORD: "$CI_REGISTRY_PASSWORD"
   script:
-    - mvn compile com.google.cloud.tools:jib-maven-plugin:3.4.4:build  -Djib.to.auth.username=${CI_REGISTRY_USER} -Djib.to.auth.password=${CI_REGISTRY_PASSWORD} -Djib.to.image=${CI_REGISTRY_IMAGE}/backend:latest
+    - mvn compile com.google.cloud.tools:jib-maven-plugin:3.4.4:build -Djib.to.auth.username=${CI_REGISTRY_USER} -Djib.to.auth.password=${CI_REGISTRY_PASSWORD} -Djib.to.image=${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHORT_SHA}
   only:
     - merge_requests
     - main
 
-
 deploy:
-
   stage: deploy
-
   image: alpine:latest
-
   before_script:
-
     - apk add --no-cache openssh-client bash
-
   script:
-  - mkdir -p ~/.ssh
-  
-  # Decode base64 key
-  - echo "$SSH_PRIVATE_KEY" | base64 -d > ~/.ssh/id_rsa
-  - chmod 600 ~/.ssh/id_rsa
-  
-  # Debug: Check key format
-  - echo "Key header:"; head -n 1 ~/.ssh/id_rsa
-  - echo "Key footer:"; tail -n 1 ~/.ssh/id_rsa
-  - echo "Key line count:"; wc -l ~/.ssh/id_rsa
-  
-  # Validate SSH key
-  - ssh-keygen -y -f ~/.ssh/id_rsa > /dev/null || { echo "Invalid SSH key format"; exit 1; }
-  
-  # Add host key
-  - ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
-  
-  # Debug info
-  - echo "Attempting to connect to $VM_USER@$VM_HOST"
-  
-  # Test connection
-  - ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=accept-new "$VM_USER@$VM_HOST" "echo 'Successfully connected to VM'"
-  
-  # Deploy
-  - |
-    ssh -i ~/.ssh/id_rsa "$VM_USER@$VM_HOST" /bin/bash -s <<EOF
-    set -e
+    - mkdir -p ~/.ssh
     
-    echo "=== Connected to VM: \$(hostname) ==="
-    echo "=== Current user: \$(whoami) ==="
-    echo "=== Starting deployment ==="
+    # Decode base64 key
+    - echo "$SSH_PRIVATE_KEY" | base64 -d > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
     
-    echo "Logging into Docker registry..."
-    echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" "$CI_REGISTRY" --password-stdin
+    # Validate SSH key
+    - ssh-keygen -y -f ~/.ssh/id_rsa > /dev/null || { echo "Invalid SSH key format"; exit 1; }
     
-    echo "Pulling image: $CI_REGISTRY_IMAGE:latest"
-    docker pull $CI_REGISTRY_IMAGE/backend:latest
- 
+    # Add host key
+    - ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
     
-    echo "Starting new container: $SERVICE_NAME"
-    docker run -d \
-      --name be \
-      --restart unless-stopped \
-      -p 8080:8080 \
-      $CI_REGISTRY_IMAGE/backend:latest
+  
     
-    echo "Container started successfully"
+    # Debug info
+    - echo "Deploying image ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHORT_SHA} to $VM_USER@$VM_HOST"
     
-    echo "=== Deployment completed successfully ==="
-    EOF
+    # Test connection
+    - ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=accept-new "$VM_USER@$VM_HOST" "echo 'Successfully connected to VM'"
+    
+    # Deploy
+    - |
+      ssh -i ~/.ssh/id_rsa "$VM_USER@$VM_HOST" /bin/bash -s <<EOF
+      set -e
+      
+      echo "=== Connected to VM: \$(hostname) ==="
+      echo "=== Current user: \$(whoami) ==="
+      echo "=== Starting deployment ==="
+      
+      echo "Logging into Docker registry..."
+      echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" "$CI_REGISTRY" --password-stdin
+      
+      echo "Pulling image: ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHORT_SHA}"
+      docker pull ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHORT_SHA}
+      
+      echo "Stopping old container: ${SERVICE_NAME}"
+      docker stop ${SERVICE_NAME} 2>/dev/null || echo "Container not running"
+      docker rm ${SERVICE_NAME} 2>/dev/null || echo "Container not found"
+      
+      echo "Starting new container: ${SERVICE_NAME}"
+      docker run -d \
+        --name ${SERVICE_NAME} \
+        --restart unless-stopped \
+        -p ${HOST_PORT}:${CONTAINER_PORT} \
+        ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHORT_SHA}
+      
+      echo "Container started successfully:"
+      docker ps | grep ${SERVICE_NAME}
+      
+      echo "Cleaning up old images..."
+      docker image prune -af --filter "until=24h" || true
+      
+      echo "=== Deployment completed successfully ==="
+      EOF
+  only:
+    - merge_requests
+    - main
