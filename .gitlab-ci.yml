@@ -50,60 +50,56 @@ deploy:
     - apk add --no-cache openssh-client bash
 
   script:
-
-    - mkdir -p ~/.ssh
-
-    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
-
-    - chmod 600 ~/.ssh/id_rsa
-
-    - ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
-
-    - |
-
-      ssh -i ~/.ssh/id_rsa $VM_USER@$VM_HOST /bin/bash -s <<'EOF'
-
-      set -e
-
-      # login to registry
-
-      echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" "$CI_REGISTRY" --password-stdin
-
-
-
-      # pull latest image
-
-      docker pull $CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}
-
-
-
-      # stop previous container (ignore failure)
-
-      docker stop $SERVICE_NAME || true
-
-      docker rm $SERVICE_NAME || true
-
-
-
-      # run new container (customize env, volumes, options)
-
-      docker run -d \
-
-        --name $SERVICE_NAME \
-
-        --restart unless-stopped \
-
-        -p ${HOST_PORT}:${CONTAINER_PORT} \
-
-        $CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}
-
-
-
-      # optional: cleanup older images (simple)
-
-      docker image prune -af || true
-
-      EOF
+  - mkdir -p ~/.ssh
+  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+  - chmod 600 ~/.ssh/id_rsa
+  
+  # Validate SSH key
+  - ssh-keygen -y -f ~/.ssh/id_rsa > /dev/null
+  
+  # Add host key
+  - ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+  
+  # Debug info
+  - echo "Attempting to connect to $VM_USER@$VM_HOST"
+  
+  # Test connection with log
+  - ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=accept-new "$VM_USER@$VM_HOST" "echo 'Successfully connected to VM'"
+  
+  # Deploy
+  - |
+    ssh -i ~/.ssh/id_rsa "$VM_USER@$VM_HOST" /bin/bash -s <<EOF
+    set -e
+    
+    echo "=== Connected to VM: \$(hostname) ==="
+    echo "=== Current user: \$(whoami) ==="
+    echo "=== Starting deployment ==="
+    
+    echo "Logging into Docker registry..."
+    echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" "$CI_REGISTRY" --password-stdin
+    
+    echo "Pulling image: $CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}"
+    docker pull $CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}
+    
+    echo "Stopping old container: $SERVICE_NAME"
+    docker stop $SERVICE_NAME || true
+    docker rm $SERVICE_NAME || true
+    
+    echo "Starting new container: $SERVICE_NAME"
+    docker run -d \
+      --name $SERVICE_NAME \
+      --restart unless-stopped \
+      -p ${HOST_PORT}:${CONTAINER_PORT} \
+      $CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}
+    
+    echo "Container started successfully"
+    docker ps | grep $SERVICE_NAME
+    
+    echo "Cleaning up old images..."
+    docker image prune -af || true
+    
+    echo "=== Deployment completed successfully ==="
+    EOF
 
   only:
 
