@@ -51,8 +51,14 @@ deploy:
 
   script:
   - mkdir -p ~/.ssh
-  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+  
+  # Write key with proper formatting
+  - echo -e "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
   - chmod 600 ~/.ssh/id_rsa
+  
+  # Debug: Check key format (first and last lines)
+  - echo "Key header:"; head -n 1 ~/.ssh/id_rsa
+  - echo "Key footer:"; tail -n 1 ~/.ssh/id_rsa
   
   # Validate SSH key
   - ssh-keygen -y -f ~/.ssh/id_rsa > /dev/null
