@@ -97,10 +97,6 @@ deploy:
       $CI_REGISTRY_IMAGE/backend:latest
     
     echo "Container started successfully"
-    docker ps | grep $SERVICE_NAME
-    
-    echo "Cleaning up old images..."
-    docker image prune -af || true
     
     echo "=== Deployment completed successfully ==="
     EOF
