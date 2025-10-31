@@ -86,6 +86,9 @@ deploy:
         --name ${SERVICE_NAME} \
         --restart unless-stopped \
         -p ${HOST_PORT}:${CONTAINER_PORT} \
+        -e SPRING_PROFILES_ACTIVE=prod \
+        -e DB_USERNAME=${DB_USERNAME} \
+        -e DB_PASSWORD=${DB_PASSWORD} \
         ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHORT_SHA}
       
       echo "Container started successfully:"
