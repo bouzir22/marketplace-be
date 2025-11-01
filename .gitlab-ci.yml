@@ -84,7 +84,7 @@ deploy:
       echo "Starting new container: ${SERVICE_NAME}"
       docker run -d \
         --name ${SERVICE_NAME} \
-        --network _ach_app-network \
+        --network _ach_app_network \
         --restart unless-stopped \
         -p ${HOST_PORT}:${CONTAINER_PORT} \
         -e SPRING_PROFILES_ACTIVE=prod \
