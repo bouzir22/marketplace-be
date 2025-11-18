@@ -80,6 +80,26 @@
 		<version>${querydsl.version}</version>
 	</dependency>
 
+	<!-- Elasticsearch -->
+	<dependency>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-data-elasticsearch</artifactId>
+	</dependency>
+
+	<!-- AWS S3 for image storage -->
+	<dependency>
+		<groupId>com.amazonaws</groupId>
+		<artifactId>aws-java-sdk-s3</artifactId>
+		<version>1.12.529</version>
+	</dependency>
+
+	<!-- Multipart file handling -->
+	<dependency>
+		<groupId>commons-io</groupId>
+		<artifactId>commons-io</artifactId>
+		<version>2.11.0</version>
+	</dependency>
+
 	</dependencies>
 
 	<build>
