@@ -1,5 +1,6 @@
 package com._ach.backend.controller;
 
+import com._ach.backend.Model.ItemRepresentation;
 import com._ach.backend.entity.Item;
 import com._ach.backend.service.ItemService;
 import com.querydsl.core.types.Predicate;
@@ -26,41 +27,41 @@ public class ItemController {
 
     // CREATE - Create a new item
     @PostMapping
-    public ResponseEntity<Item> createItem(@RequestBody Item item) {
-        Item createdItem = itemService.createItem(item);
+    public ResponseEntity<ItemRepresentation> createItem(@RequestBody ItemRepresentation item) {
+        ItemRepresentation createdItem = itemService.createItem(item);
         return new ResponseEntity<>(createdItem, HttpStatus.CREATED);
     }
 
     // READ - Get all items with optional filtering
     @GetMapping
-    public ResponseEntity<List<Item>> filterItems(
+    public ResponseEntity<List<ItemRepresentation>> filterItems(
             @QuerydslPredicate(root = Item.class) Predicate predicate) {
-        List<Item> items = itemService.filterItems(predicate);
+        List<ItemRepresentation> items = itemService.filterItems(predicate);
         return ResponseEntity.ok(items);
     }
 
     // READ - Get item by ID
     @GetMapping("/{id}")
-    public ResponseEntity<Item> getItemById(@PathVariable Long id) {
-        Item item = itemService.getItemById(id);
+    public ResponseEntity<ItemRepresentation> getItemById(@PathVariable Long id) {
+        ItemRepresentation item = itemService.getItemById(id);
         return ResponseEntity.ok(item);
     }
 
     // UPDATE - Update an existing item
     @PutMapping("/{id}")
-    public ResponseEntity<Item> updateItem(
+    public ResponseEntity<ItemRepresentation> updateItem(
             @PathVariable Long id,
-             @RequestBody Item item) {
-        Item updatedItem = itemService.updateItem(id, item);
+             @RequestBody ItemRepresentation item) {
+        ItemRepresentation updatedItem = itemService.updateItem(id, item);
         return ResponseEntity.ok(updatedItem);
     }
 
     // UPDATE - Partial update (PATCH)
     @PatchMapping("/{id}")
-    public ResponseEntity<Item> partialUpdateItem(
+    public ResponseEntity<ItemRepresentation> partialUpdateItem(
             @PathVariable Long id,
-            @RequestBody Item item) {
-        Item updatedItem = itemService.partialUpdateItem(id, item);
+            @RequestBody ItemRepresentation item) {
+        ItemRepresentation updatedItem = itemService.partialUpdateItem(id, item);
         return ResponseEntity.ok(updatedItem);
     }
 
