@@ -1,0 +1,12 @@
+
+db:
+ssh -i "ssh-key-2025-10-24.key" ubuntu@129.151.183.199
+docker run -d   --name pgsql   -e POSTGRES_USER=user   -e POSTGRES_PASSWORD=pass   -e POSTGRES_DB=db   -v pgdata:/var/lib/postgresql/data   -p 5432:5432   postgres:16
+
+
+elasticsearch:
+url:https://612ca478903b41528580a356f8ed635d.eastus2.azure.elastic-cloud.com:443
+apikey:RHVUNWlwc0JrdHZYQW5EclkzaGU6aWh6U01ZaXpUSDN5ZzJERXJNSGlPQQ==
+
+
+

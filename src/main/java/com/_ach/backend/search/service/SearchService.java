@@ -1,18 +1,28 @@
 package com._ach.backend.search.service;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch._types.query_dsl.*;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
+import co.elastic.clients.json.JsonData;
+import com._ach.backend.Model.ItemImageDTO;
+import com._ach.backend.Model.ItemRepresentation;
+import com._ach.backend.entity.Item;
+import com._ach.backend.entity.ItemImage;
+import com._ach.backend.repository.ItemRepository;
 import com._ach.backend.search.document.ItemDocument;
+import com._ach.backend.search.dto.ItemSearchResponse;
 import com._ach.backend.search.dto.SearchResponse.SearchHit;
+import com._ach.backend.service.ItemDetailsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -24,6 +34,11 @@ public class SearchService {
 
     private final ElasticsearchClient elasticsearchClient;
     private final EmbeddingService embeddingService;
+    private final ItemRepository itemRepository;
+    private final ItemDetailsService itemDetailsService;
+
+    @Value("${elasticsearch.index.name}")
+    private String indexName;
 
     /**
      * Executes a search based on the search type specified in the request
@@ -32,21 +47,12 @@ public class SearchService {
         try {
             long startTime = System.currentTimeMillis();
 
-            com._ach.backend.search.dto.SearchResponse response;
-
-            switch (searchRequest.getSearchType().toLowerCase()) {
-                case "fuzzy":
-                    response = fuzzySearch(searchRequest);
-                    break;
-                case "semantic":
-                    response = semanticSearch(searchRequest);
-                    break;
-                case "hybrid":
-                    response = hybridSearch(searchRequest);
-                    break;
-                default:
-                    throw new IllegalArgumentException("Invalid search type: " + searchRequest.getSearchType());
-            }
+            com._ach.backend.search.dto.SearchResponse response = switch (searchRequest.getSearchType().toLowerCase()) {
+                case "fuzzy" -> fuzzySearch(searchRequest);
+                case "semantic" -> semanticSearch(searchRequest);
+                case "hybrid" -> hybridSearch(searchRequest);
+                default -> throw new IllegalArgumentException("Invalid search type: " + searchRequest.getSearchType());
+            };
 
             long took = System.currentTimeMillis() - startTime;
             response.setTook(took);
@@ -56,6 +62,120 @@ public class SearchService {
             log.error("Error executing search", e);
             throw new RuntimeException("Search execution failed", e);
         }
+    }
+
+    /**
+     * Search by attribute key-value pairs - returns ItemRepresentation
+     */
+    public ItemSearchResponse searchByAttributes(Map<String, Object> filters, int page, int size) {
+        try {
+            long startTime = System.currentTimeMillis();
+
+            Query query;
+            if (filters == null || filters.isEmpty()) {
+                query = Query.of(q -> q.matchAll(m -> m));
+            } else {
+                List<Query> filterQueries = new ArrayList<>();
+                for (Map.Entry<String, Object> entry : filters.entrySet()) {
+                    String field = "attributes." + entry.getKey();
+                    String value = entry.getValue().toString();
+
+                    Query filterQuery = Query.of(q -> q
+                            .wildcard(w -> w
+                                    .field(field)
+                                    .value("*" + value + "*")
+                                    .caseInsensitive(true)
+                            )
+                    );
+                    filterQueries.add(filterQuery);
+                }
+                query = Query.of(q -> q.bool(b -> b.must(filterQueries)));
+            }
+
+            SearchRequest esRequest = SearchRequest.of(s -> s
+                    .index(indexName)
+                    .query(query)
+                    .from(page * size)
+                    .size(size)
+            );
+
+            long esStartTime = System.currentTimeMillis();
+            SearchResponse<ItemDocument> esResponse = elasticsearchClient.search(esRequest, ItemDocument.class);
+            long esQueryTime = System.currentTimeMillis() - esStartTime;
+            long esInternalTime = esResponse.took();
+
+            log.debug("Elasticsearch query time: {}ms (internal: {}ms)", esQueryTime, esInternalTime);
+
+            // Extract ES doc IDs and attributes from search response (no second ES call needed)
+            Map<String, Map<String, Object>> attributesMap = new HashMap<>();
+            List<String> esDocIds = new ArrayList<>();
+
+            for (Hit<ItemDocument> hit : esResponse.hits().hits()) {
+                esDocIds.add(hit.id());
+                if (hit.source() != null && hit.source().getAttributes() != null) {
+                    attributesMap.put(hit.id(), hit.source().getAttributes());
+                }
+            }
+
+            // Fetch items from database
+            long dbStartTime = System.currentTimeMillis();
+            List<Item> items = itemRepository.findByAttributesMapIdIn(esDocIds);
+            long dbQueryTime = System.currentTimeMillis() - dbStartTime;
+
+            log.debug("Database query time: {}ms", dbQueryTime);
+
+            // Convert to ItemRepresentation using attributes from search response
+            long conversionStartTime = System.currentTimeMillis();
+            List<ItemRepresentation> itemRepresentations = items.stream()
+                    .map(item -> toRepresentation(item, attributesMap))
+                    .toList();
+            long conversionTime = System.currentTimeMillis() - conversionStartTime;
+
+            log.debug("Conversion time: {}ms", conversionTime);
+
+            long totalTime = System.currentTimeMillis() - startTime;
+            log.debug("Total response time: {}ms (ES: {}ms, DB: {}ms, Conversion: {}ms)", totalTime, esQueryTime, dbQueryTime, conversionTime);
+
+            return new ItemSearchResponse(
+                    itemRepresentations,
+                    esResponse.hits().total() != null ? esResponse.hits().total().value() : 0L,
+                    page,
+                    size,
+                    totalTime
+            );
+        } catch (IOException e) {
+            log.error("Error executing attribute search", e);
+            throw new RuntimeException("Attribute search failed", e);
+        }
+    }
+
+    private ItemRepresentation toRepresentation(Item item, Map<String, Map<String, Object>> attributesMap) {
+        ItemRepresentation representation = new ItemRepresentation();
+        representation.setId(item.getId());
+
+        List<ItemImageDTO> imageDTOs = item.getImages().stream()
+                .map(this::toImageDTO)
+                .toList();
+        representation.setImages(imageDTOs);
+
+        if (item.getAttributesMapId() != null) {
+            Map<String, Object> attributes = attributesMap.get(item.getAttributesMapId());
+            if (attributes != null) {
+                representation.setAttributes(attributes);
+            }
+        }
+
+        return representation;
+    }
+
+    private ItemImageDTO toImageDTO(ItemImage image) {
+        ItemImageDTO dto = new ItemImageDTO();
+        dto.setId(image.getId());
+        dto.setUrl(image.getUrl());
+        dto.setMain(image.isMain());
+        dto.setDisplayOrder(image.getDisplayOrder());
+        dto.setAltText(image.getAltText());
+        return dto;
     }
 
     /**
@@ -72,7 +192,7 @@ public class SearchService {
 
         // Execute search
         SearchRequest esRequest = SearchRequest.of(s -> s
-                .index("items")
+                .index(indexName)
                 .query(finalQuery)
                 .from(searchRequest.getPage() * searchRequest.getSize())
                 .size(searchRequest.getSize())
@@ -97,12 +217,7 @@ public class SearchService {
         Query knnQuery = Query.of(q -> q
                 .scriptScore(ss -> ss
                         .query(Query.of(mq -> mq.matchAll(m -> m)))
-                        .script(sc -> sc
-                                .inline(is -> is
-                                        .source("cosineSimilarity(params.query_vector, 'embedding') + 1.0")
-                                        .params("query_vector", jsonData -> jsonData.value(queryEmbedding))
-                                )
-                        )
+                        .script(s -> s.source("cosineSimilarity(params.query_vector, 'embedding') + 1.0").params("query_vector", JsonData.of(queryEmbedding)))
                 )
         );
 
@@ -110,7 +225,7 @@ public class SearchService {
         Query finalQuery = applyFilters(knnQuery, searchRequest.getFilters());
 
         SearchRequest esRequest = SearchRequest.of(s -> s
-                .index("items")
+                .index(indexName)
                 .query(finalQuery)
                 .from(searchRequest.getPage() * searchRequest.getSize())
                 .size(searchRequest.getSize())
@@ -138,12 +253,7 @@ public class SearchService {
         Query semanticQuery = Query.of(q -> q
                 .scriptScore(ss -> ss
                         .query(Query.of(mq -> mq.matchAll(m -> m)))
-                        .script(sc -> sc
-                                .inline(is -> is
-                                        .source("cosineSimilarity(params.query_vector, 'embedding') + 1.0")
-                                        .params("query_vector", jsonData -> jsonData.value(queryEmbedding))
-                                )
-                        )
+                        .script(s -> s.source("cosineSimilarity(params.query_vector, 'embedding') + 1.0").params("query_vector", JsonData.of(queryEmbedding)))
                 )
         );
 
@@ -159,7 +269,7 @@ public class SearchService {
         Query finalQuery = applyFilters(combinedQuery, searchRequest.getFilters());
 
         SearchRequest esRequest = SearchRequest.of(s -> s
-                .index("items")
+                .index(indexName)
                 .query(finalQuery)
                 .from(searchRequest.getPage() * searchRequest.getSize())
                 .size(searchRequest.getSize())
@@ -176,13 +286,11 @@ public class SearchService {
      */
     private Query buildFuzzyQuery(com._ach.backend.search.dto.SearchRequest searchRequest) {
         return Query.of(q -> q
-                .multiMatch(mm -> mm
-                        .query(searchRequest.getQuery())
-                        .fields("attributesMapId^" + searchRequest.getAttributesBoost(),
-                                "searchableContent^" + searchRequest.getContentBoost())
-                        .fuzziness(String.valueOf(searchRequest.getFuzziness()))
-                        .prefixLength(1)
-                        .maxExpansions(50)
+                .queryString(qs -> qs
+                        .query("*" + searchRequest.getQuery() + "*")
+                        .fields("attributes.*")
+                        .defaultOperator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.Or)
+                        .lenient(true)
                 )
         );
     }
@@ -225,11 +333,17 @@ public class SearchService {
             String searchType) {
 
         List<SearchHit> hits = esResponse.hits().hits().stream()
-                .map(hit -> new SearchHit(
-                        hit.source(),
-                        hit.score() != null ? hit.score().floatValue() : 0.0f,
-                        searchType
-                ))
+                .map(hit -> {
+                    ItemDocument doc = hit.source();
+                    if (doc != null) {
+                        doc.setId(hit.id());
+                    }
+                    return new SearchHit(
+                            doc,
+                            hit.score() != null ? hit.score().floatValue() : 0.0f,
+                            searchType
+                    );
+                })
                 .collect(Collectors.toList());
 
         return new com._ach.backend.search.dto.SearchResponse(
@@ -258,7 +372,7 @@ public class SearchService {
             }
 
             elasticsearchClient.index(i -> i
-                    .index("items")
+                    .index(indexName)
                     .id(document.getId())
                     .document(document)
             );
@@ -276,7 +390,7 @@ public class SearchService {
     public void deleteDocument(String id) {
         try {
             elasticsearchClient.delete(d -> d
-                    .index("items")
+                    .index(indexName)
                     .id(id)
             );
             log.info("Document deleted successfully: {}", id);

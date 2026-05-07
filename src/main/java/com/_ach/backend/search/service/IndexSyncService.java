@@ -79,9 +79,7 @@ public class IndexSyncService {
     private ItemDocument convertToDocument(Item item) {
         ItemDocument document = new ItemDocument();
         document.setId(String.valueOf(item.getId()));
-        document.setAttributesMapId(item.getAttributesMapId());
-        document.setImage(item.getImage());
-        document.setImages(item.getImages());
+        document.setAttributesMapId(item.getAttributesMapId());;
 
         // Build searchable content from available fields
         StringBuilder searchableContent = new StringBuilder();

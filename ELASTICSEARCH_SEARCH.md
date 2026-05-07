@@ -7,7 +7,7 @@ This document describes the Elasticsearch-based search service that supports bot
 - **Fuzzy Search**: Traditional text search with fuzzy matching for typo tolerance
 - **Semantic Search**: Vector-based similarity search for meaning-based queries
 - **Hybrid Search**: Combines both fuzzy and semantic search for best results
-- **Advanced Filtering**: Filter results by attributes
+- **Advanced Filtering**: Filter results by product_details
 - **Pagination**: Built-in pagination support
 - **Score Thresholding**: Filter results by minimum relevance score
 
@@ -26,10 +26,10 @@ This document describes the Elasticsearch-based search service that supports bot
 The `items` index contains the following fields:
 
 - `id`: Unique identifier
-- `attributesMapId`: Text field with standard analyzer
+- `productDetailsId`: Text field with standard analyzer
 - `image`: Main image URL (keyword)
 - `images`: List of additional image URLs
-- `attributes`: Dynamic object for item attributes
+- `product_details`: Dynamic object for item product_details
 - `searchableContent`: Searchable text content
 - `embedding`: 768-dimensional dense vector for semantic search
 - `createdAt`: Creation timestamp
@@ -69,7 +69,7 @@ curl -X PUT "localhost:9200/items" -H 'Content-Type: application/json' -d'
       },
       "image": { "type": "keyword" },
       "images": { "type": "keyword" },
-      "attributes": {
+      "product_details": {
         "type": "object",
         "dynamic": true
       },
@@ -153,7 +153,7 @@ curl -X POST "http://localhost:8080/api/search" \
       "brand": "Dell",
       "category": "Electronics"
     },
-    "attributesBoost": 2.0,
+    product_detailsBoost: 2.0,
     "contentBoost": 1.5
   }'
 ```
@@ -170,7 +170,7 @@ Request body:
   "filters": {
     "key": "value"
   },
-  "attributesBoost": 1.0,
+  product_detailsBoost: 1.0,
   "contentBoost": 1.0
 }
 ```
@@ -182,10 +182,10 @@ Response:
     {
       "document": {
         "id": "1",
-        "attributesMapId": "map123",
+        "productDetailsId": "map123",
         "image": "image.jpg",
         "images": ["img1.jpg", "img2.jpg"],
-        "attributes": {
+        "product_details": {
           "brand": "Dell",
           "category": "Electronics"
         },
@@ -213,10 +213,10 @@ curl -X POST "http://localhost:8080/api/search/index" \
   -H "Content-Type: application/json" \
   -d '{
     "id": "1",
-    "attributesMapId": "map123",
+    "productDetailsId": "map123",
     "image": "laptop.jpg",
     "images": ["laptop1.jpg", "laptop2.jpg"],
-    "attributes": {
+    "product_details": {
       "brand": "Dell",
       "model": "XPS 15",
       "category": "Electronics",
@@ -361,7 +361,7 @@ curl http://localhost:9200/items
 
 ### Low Relevance Scores
 
-- Adjust boost parameters (`attributesBoost`, `contentBoost`)
+- Adjust boost parameters (`product_detailsBoost`, `contentBoost`)
 - Fine-tune fuzziness level
 - For semantic search, ensure embeddings are properly generated
 

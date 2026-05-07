@@ -1,6 +1,7 @@
 package com._ach.backend.search.controller;
 
 import com._ach.backend.search.document.ItemDocument;
+import com._ach.backend.search.dto.ItemSearchResponse;
 import com._ach.backend.search.dto.SearchRequest;
 import com._ach.backend.search.dto.SearchResponse;
 import com._ach.backend.search.service.SearchService;
@@ -10,6 +11,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/search")
@@ -32,36 +36,26 @@ public class SearchController {
     @GetMapping
     @Operation(
             summary = "Simple search",
-            description = "Simple search with query parameter (fuzzy search by default)"
+            description = "Search by attribute key-value pairs. Use any attribute as a query param (e.g., category=Cheese, name=Gouda)"
     )
-    public ResponseEntity<SearchResponse> simpleSearch(
-            @Parameter(description = "Search query")
-            @RequestParam String query,
-
-            @Parameter(description = "Search type: fuzzy, semantic, or hybrid")
-            @RequestParam(defaultValue = "fuzzy") String searchType,
-
-            @Parameter(description = "Fuzziness level (0-2)")
-            @RequestParam(defaultValue = "2") Integer fuzziness,
-
+    public ResponseEntity<ItemSearchResponse> simpleSearch(
             @Parameter(description = "Page number")
             @RequestParam(defaultValue = "0") Integer page,
 
             @Parameter(description = "Page size")
             @RequestParam(defaultValue = "10") Integer size,
 
-            @Parameter(description = "Minimum score threshold")
-            @RequestParam(required = false) Float minScore
+            @RequestParam Map<String, String> allParams
     ) {
-        SearchRequest request = new SearchRequest();
-        request.setQuery(query);
-        request.setSearchType(searchType);
-        request.setFuzziness(fuzziness);
-        request.setPage(page);
-        request.setSize(size);
-        request.setMinScore(minScore);
+        // Remove pagination params to get only attribute filters
+        Map<String, Object> filters = new HashMap<>();
+        allParams.forEach((key, value) -> {
+            if (!key.equals("page") && !key.equals("size")) {
+                filters.put(key, value);
+            }
+        });
 
-        SearchResponse response = searchService.search(request);
+        ItemSearchResponse response = searchService.searchByAttributes(filters, page, size);
         return ResponseEntity.ok(response);
     }
 
